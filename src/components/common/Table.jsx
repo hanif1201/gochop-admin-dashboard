@@ -1,6 +1,12 @@
 import React from "react";
 import PropTypes from "prop-types";
-import { useTable, useSortBy, usePagination } from "react-table";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  flexRender,
+} from "@tanstack/react-table";
 
 /**
  * Reusable data table component with sorting and pagination
@@ -16,31 +22,19 @@ const Table = ({
   sortable = true,
 }) => {
   // Set up react-table
-  const {
-    getTableProps,
-    getTableBodyProps,
-    headerGroups,
-    prepareRow,
-    page,
-    canPreviousPage,
-    canNextPage,
-    pageOptions,
-    pageCount,
-    gotoPage,
-    nextPage,
-    previousPage,
-    setPageSize,
-    state: { pageIndex },
-  } = useTable(
-    {
-      columns,
-      data,
-      initialState: { pageIndex: 0, pageSize },
-      disableSortBy: !sortable,
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: {
+        pageSize,
+      },
     },
-    useSortBy,
-    usePagination
-  );
+    enableSorting: sortable,
+  });
 
   // Loading state
   if (loading) {
@@ -68,24 +62,23 @@ const Table = ({
   return (
     <div className={`bg-white rounded-lg overflow-hidden ${className}`}>
       <div className='overflow-x-auto'>
-        <table
-          {...getTableProps()}
-          className='min-w-full divide-y divide-gray-200'
-        >
+        <table className='min-w-full divide-y divide-gray-200'>
           <thead className='bg-gray-50'>
-            {headerGroups.map((headerGroup) => (
-              <tr {...headerGroup.getHeaderGroupProps()}>
-                {headerGroup.headers.map((column) => (
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
                   <th
-                    {...column.getHeaderProps(
-                      sortable && column.getSortByToggleProps()
-                    )}
-                    className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                    key={header.id}
+                    onClick={header.column.getToggleSortingHandler()}
+                    className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer'
                   >
-                    {column.render("Header")}
-                    {sortable && column.isSorted && (
+                    {flexRender(
+                      header.column.columnDef.header,
+                      header.getContext()
+                    )}
+                    {sortable && header.column.getIsSorted() && (
                       <span className='ml-2'>
-                        {column.isSortedDesc ? "↓" : "↑"}
+                        {header.column.getIsSorted() === "desc" ? "↓" : "↑"}
                       </span>
                     )}
                   </th>
@@ -93,44 +86,36 @@ const Table = ({
               </tr>
             ))}
           </thead>
-          <tbody
-            {...getTableBodyProps()}
-            className='bg-white divide-y divide-gray-200'
-          >
-            {page.map((row) => {
-              prepareRow(row);
-              return (
-                <tr
-                  {...row.getRowProps()}
-                  className={
-                    onRowClick ? "cursor-pointer hover:bg-gray-50" : ""
-                  }
-                  onClick={() => onRowClick && onRowClick(row.original)}
-                >
-                  {row.cells.map((cell) => (
-                    <td
-                      {...cell.getCellProps()}
-                      className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'
-                    >
-                      {cell.render("Cell")}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
+          <tbody className='bg-white divide-y divide-gray-200'>
+            {table.getRowModel().rows.map((row) => (
+              <tr
+                key={row.id}
+                className={onRowClick ? "cursor-pointer hover:bg-gray-50" : ""}
+                onClick={() => onRowClick && onRowClick(row.original)}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td
+                    key={cell.id}
+                    className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
       {/* Pagination */}
-      {pageCount > 1 && (
+      {table.getPageCount() > 1 && (
         <div className='px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6'>
           <div className='flex-1 flex justify-between sm:hidden'>
             <button
-              onClick={() => previousPage()}
-              disabled={!canPreviousPage}
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
               className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white ${
-                !canPreviousPage
+                !table.getCanPreviousPage()
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:bg-gray-50"
               }`}
@@ -138,10 +123,10 @@ const Table = ({
               Previous
             </button>
             <button
-              onClick={() => nextPage()}
-              disabled={!canNextPage}
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
               className={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white ${
-                !canNextPage
+                !table.getCanNextPage()
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:bg-gray-50"
               }`}
@@ -154,11 +139,14 @@ const Table = ({
               <p className='text-sm text-gray-700'>
                 Showing{" "}
                 <span className='font-medium'>
-                  {page.length > 0 ? pageIndex * pageSize + 1 : 0}
+                  {table.getState().pagination.pageIndex * pageSize + 1}
                 </span>{" "}
                 to{" "}
                 <span className='font-medium'>
-                  {Math.min((pageIndex + 1) * pageSize, data.length)}
+                  {Math.min(
+                    (table.getState().pagination.pageIndex + 1) * pageSize,
+                    data.length
+                  )}
                 </span>{" "}
                 of <span className='font-medium'>{data.length}</span> results
               </p>
@@ -169,10 +157,10 @@ const Table = ({
                 aria-label='Pagination'
               >
                 <button
-                  onClick={() => gotoPage(0)}
-                  disabled={!canPreviousPage}
+                  onClick={() => table.setPageIndex(0)}
+                  disabled={!table.getCanPreviousPage()}
                   className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 ${
-                    !canPreviousPage
+                    !table.getCanPreviousPage()
                       ? "opacity-50 cursor-not-allowed"
                       : "hover:bg-gray-50"
                   }`}
@@ -181,10 +169,10 @@ const Table = ({
                   <span aria-hidden='true'>&laquo;</span>
                 </button>
                 <button
-                  onClick={() => previousPage()}
-                  disabled={!canPreviousPage}
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
                   className={`relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 ${
-                    !canPreviousPage
+                    !table.getCanPreviousPage()
                       ? "opacity-50 cursor-not-allowed"
                       : "hover:bg-gray-50"
                   }`}
@@ -192,78 +180,28 @@ const Table = ({
                   <span className='sr-only'>Previous</span>
                   <span aria-hidden='true'>&lsaquo;</span>
                 </button>
-                {pageOptions.length <= 5 ? (
-                  // Show all page numbers if we have 5 or fewer
-                  pageOptions.map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => gotoPage(page)}
-                      className={`relative inline-flex items-center px-4 py-2 border ${
-                        page === pageIndex
-                          ? "z-10 bg-primary-50 border-primary-500 text-primary-600"
-                          : "border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
-                      } text-sm font-medium`}
-                    >
-                      {page + 1}
-                    </button>
-                  ))
-                ) : (
-                  // Show limited page numbers with ellipsis
-                  <>
-                    {/* Always show first page */}
-                    <button
-                      onClick={() => gotoPage(0)}
-                      className={`relative inline-flex items-center px-4 py-2 border ${
-                        pageIndex === 0
-                          ? "z-10 bg-primary-50 border-primary-500 text-primary-600"
-                          : "border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
-                      } text-sm font-medium`}
-                    >
-                      1
-                    </button>
-
-                    {/* Show ellipsis if not on pages 0-2 */}
-                    {pageIndex >= 3 && (
-                      <span className='relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700'>
-                        ...
-                      </span>
-                    )}
-
-                    {/* Current page and adjacent */}
-                    {pageIndex > 0 && pageIndex < pageCount - 1 && (
-                      <button
-                        onClick={() => gotoPage(pageIndex)}
-                        className='relative inline-flex items-center px-4 py-2 border z-10 bg-primary-50 border-primary-500 text-primary-600 text-sm font-medium'
-                      >
-                        {pageIndex + 1}
-                      </button>
-                    )}
-
-                    {/* Show ellipsis if not on last 3 pages */}
-                    {pageIndex <= pageCount - 4 && (
-                      <span className='relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700'>
-                        ...
-                      </span>
-                    )}
-
-                    {/* Always show last page */}
-                    <button
-                      onClick={() => gotoPage(pageCount - 1)}
-                      className={`relative inline-flex items-center px-4 py-2 border ${
-                        pageIndex === pageCount - 1
-                          ? "z-10 bg-primary-50 border-primary-500 text-primary-600"
-                          : "border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
-                      } text-sm font-medium`}
-                    >
-                      {pageCount}
-                    </button>
-                  </>
-                )}
+                {/* Page numbers */}
+                {Array.from(
+                  { length: table.getPageCount() },
+                  (_, index) => index
+                ).map((pageIndex) => (
+                  <button
+                    key={pageIndex}
+                    onClick={() => table.setPageIndex(pageIndex)}
+                    className={`relative inline-flex items-center px-4 py-2 border ${
+                      pageIndex === table.getState().pagination.pageIndex
+                        ? "z-10 bg-primary-50 border-primary-500 text-primary-600"
+                        : "border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
+                    } text-sm font-medium`}
+                  >
+                    {pageIndex + 1}
+                  </button>
+                ))}
                 <button
-                  onClick={() => nextPage()}
-                  disabled={!canNextPage}
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
                   className={`relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 ${
-                    !canNextPage
+                    !table.getCanNextPage()
                       ? "opacity-50 cursor-not-allowed"
                       : "hover:bg-gray-50"
                   }`}
@@ -272,10 +210,10 @@ const Table = ({
                   <span aria-hidden='true'>&rsaquo;</span>
                 </button>
                 <button
-                  onClick={() => gotoPage(pageCount - 1)}
-                  disabled={!canNextPage}
+                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                  disabled={!table.getCanNextPage()}
                   className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 ${
-                    !canNextPage
+                    !table.getCanNextPage()
                       ? "opacity-50 cursor-not-allowed"
                       : "hover:bg-gray-50"
                   }`}
