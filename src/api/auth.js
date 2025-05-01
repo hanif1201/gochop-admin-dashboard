@@ -1,9 +1,25 @@
 import { post, get } from "./index";
 
 const authService = {
-  // Login admin user
-  login: async (credentials) => {
-    return await post("/auth/login", credentials);
+  // Login user with specific dashboard type
+  login: async (credentials, dashboardType = "admin") => {
+    try {
+      console.log("Login request:", {
+        email: credentials.email,
+        dashboardType,
+      });
+
+      const response = await post("/auth/login", credentials, {
+        headers: {
+          "x-dashboard-type": dashboardType,
+        },
+      });
+
+      return response;
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
+    }
   },
 
   // Logout user
